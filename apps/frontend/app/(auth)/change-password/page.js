@@ -1,27 +1,35 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
-import { saveAuth } from '../../../lib/auth';
 
-export default function LoginPage() {
+export default function ChangePasswordPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    api.me().then(setUser).catch(() => router.push('/login'));
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+
+    if (password.length < 8) {
+      return setError('Password minimal 8 karakter.');
+    }
+    if (password !== confirm) {
+      return setError('Konfirmasi password tidak cocok.');
+    }
+
     setLoading(true);
-
     try {
-      const result = await api.login(form.email, form.password);
-      saveAuth(result.token, result.user);
-
-      if (result.force_password_change) {
-        router.push('/change-password');
-      } else if (result.user.role === 'owner') {
+      await api.changePassword(password);
+      if (user?.role === 'owner') {
         router.push('/owner');
       } else {
         router.push('/dashboard');
@@ -36,7 +44,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-white rounded-2xl shadow-lg mb-4">
             <span className="text-2xl font-bold text-blue-700">Y</span>
@@ -45,10 +52,11 @@ export default function LoginPage() {
           <p className="text-blue-200 text-sm mt-1">Sales Balance Tracker</p>
         </div>
 
-        {/* Form Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Masuk ke Akun</h2>
-          <p className="text-sm text-gray-500 mb-5">Disiplin dimulai dari login.</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Buat Password Baru</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            Akun baru harus ganti password sebelum bisa lanjut.
+          </p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">
@@ -58,25 +66,25 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="label">Email</label>
+              <label className="label">Password Baru</label>
               <input
-                type="email"
+                type="password"
                 className="input"
-                placeholder="kamu@yescare.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="Minimal 8 karakter"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
 
             <div>
-              <label className="label">Password</label>
+              <label className="label">Konfirmasi Password</label>
               <input
                 type="password"
                 className="input"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="Ulangi password baru"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
                 required
               />
             </div>
@@ -89,10 +97,10 @@ export default function LoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Masuk...
+                  Menyimpan...
                 </span>
               ) : (
-                'Masuk'
+                'Simpan Password'
               )}
             </button>
           </form>

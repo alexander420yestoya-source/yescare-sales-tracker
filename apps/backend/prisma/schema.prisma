@@ -29,6 +29,19 @@ enum TaskStatus {
   completed
 }
 
+enum TaskDifficulty {
+  low
+  medium
+  high
+}
+
+enum CompletionResult {
+  success
+  lost
+  postponed
+  no_response
+}
+
 enum ExtensionStatus {
   pending
   approved
@@ -41,34 +54,40 @@ enum CoachingStatus {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  password_hash String
-  role          Role     @default(sales)
-  created_at    DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  email                String   @unique
+  password_hash        String
+  role                 Role     @default(sales)
+  must_change_password Boolean  @default(false)
+  created_at           DateTime @default(now())
 
-  tasks            Task[]
-  daily_activities DailyActivity[]
-  weekly_summaries WeeklySummary[]
-  coaching_requests CoachingRequest[]
+  tasks               Task[]
+  daily_activities    DailyActivity[]
+  weekly_summaries    WeeklySummary[]
+  coaching_requests   CoachingRequest[]
   approved_extensions ExtensionRequest[] @relation("ApprovedBy")
 }
 
 model Task {
-  id              String     @id @default(uuid())
-  user_id         String
-  account_name    String
-  task_type       TaskType
-  title           String
-  deadline        DateTime
-  status          TaskStatus @default(on_track)
-  extension_count Int        @default(0)
-  created_at      DateTime   @default(now())
-  completed_at    DateTime?
+  id               String           @id @default(uuid())
+  user_id          String
+  account_name     String
+  task_type        TaskType
+  title            String
+  deadline         DateTime
+  status           TaskStatus       @default(on_track)
+  difficulty       TaskDifficulty   @default(medium)
+  extension_count  Int              @default(0)
+  completion_result CompletionResult?
+  created_at       DateTime         @default(now())
+  completed_at     DateTime?
 
   user       User               @relation(fields: [user_id], references: [id])
   extensions ExtensionRequest[]
+
+  @@index([user_id, deadline])
+  @@index([user_id, created_at])
 }
 
 model ExtensionRequest {
@@ -87,15 +106,15 @@ model ExtensionRequest {
 }
 
 model DailyActivity {
-  id                       String   @id @default(uuid())
-  user_id                  String
-  date                     DateTime @default(now())
-  account_progress         Int      @default(0)
-  stakeholder_interaction  Int      @default(0)
-  meeting_requested        Int      @default(0)
-  follow_up_done           Int      @default(0)
-  preventive_shared        Int      @default(0)
-  reflection_text          String
+  id                      String   @id @default(uuid())
+  user_id                 String
+  date                    DateTime @db.Date
+  account_progress        Int      @default(0)
+  stakeholder_interaction Int      @default(0)
+  meeting_requested       Int      @default(0)
+  follow_up_done          Int      @default(0)
+  preventive_shared       Int      @default(0)
+  reflection_text         String
 
   user User @relation(fields: [user_id], references: [id])
 
@@ -103,17 +122,19 @@ model DailyActivity {
 }
 
 model WeeklySummary {
-  id                    String   @id @default(uuid())
-  user_id               String
-  week_start            DateTime
-  sla_on_time_percentage Float   @default(0)
-  meeting_count         Int      @default(0)
-  overdue_count         Int      @default(0)
-  extension_count       Int      @default(0)
-  stagnant_account_count Int     @default(0)
-  preventive_count      Int      @default(0)
-  flags                 Json     @default("[]")
-  created_at            DateTime @default(now())
+  id                     String   @id @default(uuid())
+  user_id                String
+  week_start             DateTime
+  sla_on_time_percentage Float    @default(0)
+  meeting_count          Int      @default(0)
+  overdue_count          Int      @default(0)
+  extension_count        Int      @default(0)
+  stagnant_account_count Int      @default(0)
+  preventive_count       Int      @default(0)
+  flags                  Json     @default("[]")
+  self_assessment        Int?
+  owner_note             String?
+  created_at             DateTime @default(now())
 
   user User @relation(fields: [user_id], references: [id])
 

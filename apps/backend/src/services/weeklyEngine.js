@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /**
  * MICRO LESSONS — konten hardcoded per flag
@@ -96,16 +95,20 @@ async function generateWeeklySummary(userId) {
   const meetingCount = activities.reduce((sum, a) => sum + a.meeting_requested, 0);
   const preventiveCount = activities.reduce((sum, a) => sum + a.preventive_shared, 0);
 
-  // Akun stagnan: tidak ada aktivitas >14 hari
+  // Akun stagnan: tidak ada aktivitas >14 hari — optimized with distinct + select
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const allTasks = await prisma.task.findMany({ where: { user_id: userId } });
-  const recentAccounts = new Set(
-    (await prisma.task.findMany({
-      where: { user_id: userId, created_at: { gte: fourteenDaysAgo } },
-    })).map((t) => t.account_name)
-  );
-  const allAccounts = new Set(allTasks.map((t) => t.account_name));
-  const stagnantCount = [...allAccounts].filter((acc) => !recentAccounts.has(acc)).length;
+  const allAccountNames = await prisma.task.findMany({
+    where: { user_id: userId },
+    select: { account_name: true },
+    distinct: ['account_name'],
+  });
+  const recentAccountNames = await prisma.task.findMany({
+    where: { user_id: userId, created_at: { gte: fourteenDaysAgo } },
+    select: { account_name: true },
+    distinct: ['account_name'],
+  });
+  const recentSet = new Set(recentAccountNames.map((t) => t.account_name));
+  const stagnantCount = allAccountNames.filter((t) => !recentSet.has(t.account_name)).length;
 
   // RULE-BASED FLAG DETECTION
   const flags = [];
@@ -133,7 +136,7 @@ async function generateWeeklySummary(userId) {
     }
   }
 
-  // Upsert summary
+  // Upsert summary — flags stored directly as JSON array (no double serialization)
   const summary = await prisma.weeklySummary.upsert({
     where: { user_id_week_start: { user_id: userId, week_start: monday } },
     update: {
@@ -143,7 +146,7 @@ async function generateWeeklySummary(userId) {
       extension_count: extensionCount,
       stagnant_account_count: stagnantCount,
       preventive_count: preventiveCount,
-      flags: JSON.stringify(flags),
+      flags,
     },
     create: {
       user_id: userId,
@@ -154,7 +157,7 @@ async function generateWeeklySummary(userId) {
       extension_count: extensionCount,
       stagnant_account_count: stagnantCount,
       preventive_count: preventiveCount,
-      flags: JSON.stringify(flags),
+      flags,
     },
   });
 

@@ -1,9 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma');
 const { authMiddleware, ownerOnly } = require('../middleware/auth');
+const { computeTaskStatus } = require('../services/taskStatus');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // POST /api/extensions — request extension untuk task
 router.post('/', authMiddleware, async (req, res) => {
@@ -18,21 +18,16 @@ router.post('/', authMiddleware, async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task tidak ditemukan.' });
     if (task.user_id !== req.user.id) return res.status(403).json({ error: 'Bukan task kamu.' });
 
-    // Validasi: max 2 extension
     if (task.extension_count >= 2) {
       return res.status(400).json({ error: 'Maksimal 2 extension per task sudah tercapai.' });
     }
-
-    // Validasi: tidak boleh sudah overdue
     if (task.status === 'overdue') {
       return res.status(400).json({ error: 'Tidak bisa request extension setelah task overdue.' });
     }
-
     if (task.status === 'completed') {
       return res.status(400).json({ error: 'Task sudah selesai.' });
     }
 
-    // Cek tidak ada pending extension
     const pendingExt = await prisma.extensionRequest.findFirst({
       where: { task_id, status: 'pending' },
     });
@@ -78,24 +73,24 @@ router.patch('/:id/approve', authMiddleware, ownerOnly, async (req, res) => {
     if (!ext) return res.status(404).json({ error: 'Extension tidak ditemukan.' });
     if (ext.status !== 'pending') return res.status(400).json({ error: 'Extension sudah diproses.' });
 
-    // Update extension
     const updated = await prisma.extensionRequest.update({
       where: { id: req.params.id },
-      data: {
-        status: 'approved',
-        approved_by: req.user.id,
-        approved_at: new Date(),
-      },
+      data: { status: 'approved', approved_by: req.user.id, approved_at: new Date() },
     });
 
-    // Update task deadline & status
-    await prisma.task.update({
+    // Update task deadline, increment extension_count, lalu recompute status
+    const updatedTask = await prisma.task.update({
       where: { id: ext.task_id },
       data: {
         deadline: ext.requested_deadline,
-        status: 'extended',
         extension_count: { increment: 1 },
       },
+    });
+
+    const newStatus = computeTaskStatus(updatedTask);
+    await prisma.task.update({
+      where: { id: ext.task_id },
+      data: { status: newStatus },
     });
 
     res.json({ message: 'Extension disetujui.', extension: updated });
@@ -113,11 +108,7 @@ router.patch('/:id/reject', authMiddleware, ownerOnly, async (req, res) => {
 
     const updated = await prisma.extensionRequest.update({
       where: { id: req.params.id },
-      data: {
-        status: 'rejected',
-        approved_by: req.user.id,
-        approved_at: new Date(),
-      },
+      data: { status: 'rejected', approved_by: req.user.id, approved_at: new Date() },
     });
 
     res.json({ message: 'Extension ditolak.', extension: updated });

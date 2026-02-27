@@ -14,6 +14,13 @@ export default function OwnerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Tambah Anggota form state
+  const [showForm, setShowForm] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'sales' });
+  const [creating, setCreating] = useState(false);
+  const [createResult, setCreateResult] = useState(null);
+  const [createError, setCreateError] = useState('');
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -27,15 +34,117 @@ export default function OwnerPage() {
     }
   }
 
+  async function handleCreateUser(e) {
+    e.preventDefault();
+    setCreateError('');
+    setCreating(true);
+    try {
+      const result = await api.createUser(newUser);
+      setCreateResult(result);
+      setNewUser({ name: '', email: '', role: 'sales' });
+      loadData();
+    } catch (err) {
+      setCreateError(err.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const totalPendingExt = salesTeam.reduce((sum, s) => sum + (s.pending_extensions || 0), 0);
   const totalOpenCoaching = salesTeam.reduce((sum, s) => sum + (s.open_coaching || 0), 0);
 
   return (
     <div className="p-4 space-y-4">
-      <div className="pt-2">
-        <h1 className="text-xl font-bold text-gray-900">Owner Dashboard</h1>
-        <p className="text-xs text-gray-500 mt-0.5">Pantau performa tim sales kamu.</p>
+      <div className="pt-2 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Owner Dashboard</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Pantau performa tim sales kamu.</p>
+        </div>
+        <button
+          onClick={() => { setShowForm(!showForm); setCreateResult(null); setCreateError(''); }}
+          className="btn-primary text-sm px-3 py-2"
+        >
+          + Anggota
+        </button>
       </div>
+
+      {/* Tambah Anggota Form */}
+      {showForm && (
+        <div className="card border border-blue-100 bg-blue-50">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Tambah Anggota Tim</h3>
+
+          {createResult ? (
+            <div className="space-y-3">
+              <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
+                <p className="text-sm font-semibold text-green-800 mb-1">Akun berhasil dibuat!</p>
+                <p className="text-xs text-green-700">Email: <span className="font-mono font-semibold">{createResult.email}</span></p>
+                <p className="text-xs text-green-700 mt-1">Password sementara:</p>
+                <p className="font-mono text-sm font-bold text-green-900 bg-green-100 rounded px-2 py-1 mt-1 select-all">
+                  {createResult.temporary_password}
+                </p>
+                <p className="text-xs text-green-600 mt-1">Bagikan ke anggota. Mereka harus ganti password saat pertama login.</p>
+              </div>
+              <button
+                onClick={() => { setCreateResult(null); setShowForm(false); }}
+                className="btn-primary w-full py-2 text-sm"
+              >
+                Selesai
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleCreateUser} className="space-y-3">
+              {createError && (
+                <div className="p-2 bg-red-50 border border-red-100 rounded text-xs text-red-600">{createError}</div>
+              )}
+              <div>
+                <label className="label text-xs">Nama</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Nama lengkap"
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label text-xs">Email</label>
+                <input
+                  type="email"
+                  className="input"
+                  placeholder="email@perusahaan.com"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label text-xs">Role</label>
+                <select
+                  className="input"
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                >
+                  <option value="sales">Sales</option>
+                  <option value="owner">Owner</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={creating} className="btn-primary flex-1 py-2 text-sm">
+                  {creating ? 'Membuat...' : 'Buat Akun'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">{error}</div>

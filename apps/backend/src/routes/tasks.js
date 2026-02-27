@@ -1,20 +1,28 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma');
 const { authMiddleware } = require('../middleware/auth');
 const { computeTaskStatus } = require('../services/taskStatus');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-// GET /api/tasks — ambil tasks milik user login (atau semua kalau owner)
+// GET /api/tasks — semua tasks dengan pagination
 router.get('/', authMiddleware, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
+
   try {
     const where = req.user.role === 'owner' ? {} : { user_id: req.user.id };
-    const tasks = await prisma.task.findMany({
-      where,
-      include: { extensions: true, user: { select: { name: true } } },
-      orderBy: { created_at: 'desc' },
-    });
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        include: { extensions: true, user: { select: { name: true } } },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.task.count({ where }),
+    ]);
 
     // Sinkronkan status secara real-time
     const updated = await Promise.all(
@@ -28,26 +36,26 @@ router.get('/', authMiddleware, async (req, res) => {
       })
     );
 
-    res.json(updated);
+    res.json({ data: updated, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil task.', detail: err.message });
   }
 });
 
-// GET /api/tasks/today — tasks user hari ini
-router.get('/today', authMiddleware, async (req, res) => {
+// GET /api/tasks/due-today — tasks yang deadline-nya hari ini
+router.get('/due-today', authMiddleware, async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const today = new Date(todayStr);
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
     const tasks = await prisma.task.findMany({
       where: {
         user_id: req.user.id,
-        created_at: { gte: today, lt: tomorrow },
+        deadline: { gte: today, lt: tomorrow },
       },
       include: { extensions: true },
-      orderBy: { created_at: 'desc' },
+      orderBy: { deadline: 'asc' },
     });
 
     res.json(tasks);
@@ -58,7 +66,7 @@ router.get('/today', authMiddleware, async (req, res) => {
 
 // POST /api/tasks — buat task baru
 router.post('/', authMiddleware, async (req, res) => {
-  const { account_name, task_type, title, deadline } = req.body;
+  const { account_name, task_type, title, deadline, difficulty } = req.body;
 
   if (!account_name || !task_type || !title || !deadline) {
     return res.status(400).json({ error: 'Semua field wajib diisi.' });
@@ -69,6 +77,9 @@ router.post('/', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Format deadline tidak valid.' });
   }
 
+  const validDifficulties = ['low', 'medium', 'high'];
+  const taskDifficulty = validDifficulties.includes(difficulty) ? difficulty : 'medium';
+
   try {
     const task = await prisma.task.create({
       data: {
@@ -77,6 +88,7 @@ router.post('/', authMiddleware, async (req, res) => {
         task_type,
         title,
         deadline: deadlineDate,
+        difficulty: taskDifficulty,
         status: computeTaskStatus({ deadline: deadlineDate, status: 'on_track', extension_count: 0 }),
       },
     });
@@ -88,6 +100,16 @@ router.post('/', authMiddleware, async (req, res) => {
 
 // PATCH /api/tasks/:id/complete — tandai task selesai
 router.patch('/:id/complete', authMiddleware, async (req, res) => {
+  const { completion_result } = req.body;
+
+  const validResults = ['success', 'lost', 'postponed', 'no_response'];
+  if (!completion_result || !validResults.includes(completion_result)) {
+    return res.status(400).json({
+      error: 'completion_result wajib diisi.',
+      valid_values: validResults,
+    });
+  }
+
   try {
     const task = await prisma.task.findUnique({ where: { id: req.params.id } });
     if (!task) return res.status(404).json({ error: 'Task tidak ditemukan.' });
@@ -95,7 +117,7 @@ router.patch('/:id/complete', authMiddleware, async (req, res) => {
 
     const updated = await prisma.task.update({
       where: { id: req.params.id },
-      data: { status: 'completed', completed_at: new Date() },
+      data: { status: 'completed', completed_at: new Date(), completion_result },
     });
     res.json(updated);
   } catch (err) {

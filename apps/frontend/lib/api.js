@@ -31,15 +31,16 @@ export const api = {
   // Auth
   login: (email, password) =>
     request('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (name, email, password, role) =>
-    request('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, role }) }),
+  changePassword: (new_password) =>
+    request('/api/auth/change-password', { method: 'PATCH', body: JSON.stringify({ new_password }) }),
   me: () => request('/api/auth/me'),
 
   // Tasks
-  getTasks: () => request('/api/tasks'),
-  getTodayTasks: () => request('/api/tasks/today'),
+  getTasks: (page = 1, limit = 20) => request(`/api/tasks?page=${page}&limit=${limit}`),
+  getDueTodayTasks: () => request('/api/tasks/due-today'),
   createTask: (data) => request('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
-  completeTask: (id) => request(`/api/tasks/${id}/complete`, { method: 'PATCH' }),
+  completeTask: (id, completion_result) =>
+    request(`/api/tasks/${id}/complete`, { method: 'PATCH', body: JSON.stringify({ completion_result }) }),
   deleteTask: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
 
   // Extensions
@@ -59,6 +60,10 @@ export const api = {
   getWeeklySummary: () => request('/api/weekly'),
   getAllWeeklySummaries: () => request('/api/weekly/all'),
   generateWeeklySummary: () => request('/api/weekly/generate', { method: 'POST' }),
+  selfAssessment: (id, score) =>
+    request(`/api/weekly/${id}/self-assessment`, { method: 'PATCH', body: JSON.stringify({ score }) }),
+  ownerNote: (id, note) =>
+    request(`/api/weekly/${id}/owner-note`, { method: 'PATCH', body: JSON.stringify({ note }) }),
 
   // Coaching
   getCoachingRequests: () => request('/api/coaching'),
@@ -70,4 +75,5 @@ export const api = {
   // Owner
   getSalesTeam: () => request('/api/owner/sales'),
   getSalesDetail: (id) => request(`/api/owner/sales/${id}`),
+  createUser: (data) => request('/api/owner/users', { method: 'POST', body: JSON.stringify(data) }),
 };
