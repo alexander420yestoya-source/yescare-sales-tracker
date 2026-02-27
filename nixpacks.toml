@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["cd apps/frontend && npm install"]
+
+[phases.build]
+cmds = ["cd apps/frontend && npm run build"]
+
+[start]
+cmd = "cd apps/frontend && npm start"
