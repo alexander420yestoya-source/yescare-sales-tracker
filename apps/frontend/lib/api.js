@@ -76,4 +76,7 @@ export const api = {
   getSalesTeam: () => request('/api/owner/sales'),
   getSalesDetail: (id) => request(`/api/owner/sales/${id}`),
   createUser: (data) => request('/api/owner/users', { method: 'POST', body: JSON.stringify(data) }),
+  editUser: (id, data) => request(`/api/owner/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  resetUserPassword: (id) => request(`/api/owner/users/${id}/reset-password`, { method: 'PATCH' }),
+  deleteUser: (id) => request(`/api/owner/users/${id}`, { method: 'DELETE' }),
 };

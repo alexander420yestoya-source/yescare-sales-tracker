@@ -43,6 +43,81 @@ router.post('/users', authMiddleware, ownerOnly, async (req, res) => {
   }
 });
 
+// PATCH /api/owner/users/:id — edit nama/email/role anggota
+router.patch('/users/:id', authMiddleware, ownerOnly, async (req, res) => {
+  const { name, email, role } = req.body;
+
+  if (!name && !email && !role) {
+    return res.status(400).json({ error: 'Tidak ada data yang diubah.' });
+  }
+
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+    if (email && email !== target.email) {
+      const emailUsed = await prisma.user.findUnique({ where: { email } });
+      if (emailUsed) return res.status(400).json({ error: 'Email sudah digunakan.' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(email && { email }),
+        ...(role && { role: role === 'owner' ? 'owner' : 'sales' }),
+      },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    res.json({ message: 'Data anggota diperbarui.', user: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal memperbarui data.', detail: err.message });
+  }
+});
+
+// PATCH /api/owner/users/:id/reset-password — reset password anggota
+router.patch('/users/:id/reset-password', authMiddleware, ownerOnly, async (req, res) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+    const tempPassword = crypto.randomBytes(6).toString('hex');
+    const hash = await bcrypt.hash(tempPassword, 10);
+
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { password_hash: hash, must_change_password: true },
+    });
+
+    res.json({
+      message: 'Password berhasil direset.',
+      email: target.email,
+      temporary_password: tempPassword,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal reset password.', detail: err.message });
+  }
+});
+
+// DELETE /api/owner/users/:id — hapus anggota
+router.delete('/users/:id', authMiddleware, ownerOnly, async (req, res) => {
+  if (req.user.id === req.params.id) {
+    return res.status(400).json({ error: 'Tidak bisa menghapus akun sendiri.' });
+  }
+
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User tidak ditemukan.' });
+
+    await prisma.user.delete({ where: { id: req.params.id } });
+
+    res.json({ message: 'User dihapus.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal menghapus user.', detail: err.message });
+  }
+});
+
 // GET /api/owner/sales — daftar semua sales dengan ringkasan
 router.get('/sales', authMiddleware, ownerOnly, async (req, res) => {
   try {

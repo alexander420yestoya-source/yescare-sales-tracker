@@ -61,6 +61,9 @@ export default function DashboardLayout({ children }) {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500 hidden sm:block">{user.name}</span>
+          <Link href="/settings" className="text-gray-400 hover:text-gray-600 text-lg leading-none" title="Pengaturan">
+            ⚙️
+          </Link>
           <button
             onClick={handleLogout}
             className="text-gray-400 hover:text-gray-600 text-xs font-medium"
