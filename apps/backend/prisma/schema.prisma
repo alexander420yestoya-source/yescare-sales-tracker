@@ -83,7 +83,7 @@ model Task {
   created_at       DateTime         @default(now())
   completed_at     DateTime?
 
-  user       User               @relation(fields: [user_id], references: [id])
+  user       User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
   extensions ExtensionRequest[]
 
   @@index([user_id, deadline])
@@ -101,8 +101,8 @@ model ExtensionRequest {
   approved_by        String?
   approved_at        DateTime?
 
-  task     Task  @relation(fields: [task_id], references: [id])
-  approver User? @relation("ApprovedBy", fields: [approved_by], references: [id])
+  task     Task  @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  approver User? @relation("ApprovedBy", fields: [approved_by], references: [id], onDelete: SetNull)
 }
 
 model DailyActivity {
@@ -116,7 +116,7 @@ model DailyActivity {
   preventive_shared       Int      @default(0)
   reflection_text         String
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, date])
 }
@@ -136,7 +136,7 @@ model WeeklySummary {
   owner_note             String?
   created_at             DateTime @default(now())
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, week_start])
 }
@@ -148,5 +148,5 @@ model CoachingRequest {
   status     CoachingStatus @default(open)
   created_at DateTime       @default(now())
 
-  user User @relation(fields: [user_id], references: [id])
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
