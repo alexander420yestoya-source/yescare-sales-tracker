@@ -110,7 +110,28 @@ router.delete('/users/:id', authMiddleware, ownerOnly, async (req, res) => {
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
-    await prisma.user.delete({ where: { id: req.params.id } });
+    // Hapus semua data relasi secara manual dalam transaksi (urutan penting)
+    await prisma.$transaction([
+      // 1. Null-out approved_by jika user ini pernah approve extension orang lain
+      prisma.extensionRequest.updateMany({
+        where: { approved_by: req.params.id },
+        data: { approved_by: null },
+      }),
+      // 2. Hapus extension requests dari task milik user ini
+      prisma.extensionRequest.deleteMany({
+        where: { task: { user_id: req.params.id } },
+      }),
+      // 3. Hapus semua task
+      prisma.task.deleteMany({ where: { user_id: req.params.id } }),
+      // 4. Hapus daily activities
+      prisma.dailyActivity.deleteMany({ where: { user_id: req.params.id } }),
+      // 5. Hapus weekly summaries
+      prisma.weeklySummary.deleteMany({ where: { user_id: req.params.id } }),
+      // 6. Hapus coaching requests
+      prisma.coachingRequest.deleteMany({ where: { user_id: req.params.id } }),
+      // 7. Hapus user
+      prisma.user.delete({ where: { id: req.params.id } }),
+    ]);
 
     res.json({ message: 'User dihapus.' });
   } catch (err) {
